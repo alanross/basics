@@ -1,0 +1,13 @@
+{
+  "name": "express-restful-api",
+  "version": "0.0.1",
+  "dependencies": {
+    "express": "latest",
+    "body-parser": "^1.15.2",
+    "ejs": "^1.0.0",
+    "express-ejs-layouts": "^1.1.0"
+  },
+  "engines": {
+    "node": ">=0.10.0"
+  }
+}

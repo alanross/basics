@@ -1,0 +1,202 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+	<title>Learning WebGL &mdash; lesson 1</title>
+	<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+
+	<script type="text/javascript" src="assets/glMatrix-0.9.5.min.js"></script>
+
+	<script id="shader-fs" type="x-shader/x-fragment">
+		precision mediump float;
+
+		void main(void) {
+		gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
+		}
+	</script>
+
+	<script id="shader-vs" type="x-shader/x-vertex">
+		attribute vec3 aVertexPosition;
+
+		uniform mat4 uMVMatrix;
+		uniform mat4 uPMatrix;
+
+		void main(void) {
+		gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+		}
+	</script>
+
+
+	<script type="text/javascript">
+
+		var _gl;
+		var _program;
+
+		var _mvMatrix = mat4.create();
+		var _pMatrix = mat4.create();
+
+		var _triangleVertexPositionBuffer;
+		var _squareVertexPositionBuffer;
+
+		function initGL( canvas )
+		{
+			try
+			{
+				_gl = canvas.getContext( "experimental-webgl" );
+				_gl.viewportWidth = canvas.width;
+				_gl.viewportHeight = canvas.height;
+			}
+			catch( e )
+			{
+			}
+			if( !_gl )
+			{
+				alert( "Could not initialise WebGL, sorry :-(" );
+			}
+		}
+
+		function initShaders()
+		{
+			var fragmentShader = getShader( _gl, "shader-fs" );
+			var vertexShader = getShader( _gl, "shader-vs" );
+
+			_program = _gl.createProgram();
+			_gl.attachShader( _program, vertexShader );
+			_gl.attachShader( _program, fragmentShader );
+			_gl.linkProgram( _program );
+
+			if( !_gl.getProgramParameter( _program, _gl.LINK_STATUS ) )
+			{
+				alert( "Could not initialise shaders" );
+			}
+
+			_gl.useProgram( _program );
+
+			_program.vertexPositionAttribute = _gl.getAttribLocation( _program, "aVertexPosition" );
+			_gl.enableVertexAttribArray( _program.vertexPositionAttribute );
+
+			_program.pMatrixUniform = _gl.getUniformLocation( _program, "uPMatrix" );
+			_program.mvMatrixUniform = _gl.getUniformLocation( _program, "uMVMatrix" );
+		}
+
+		function initBuffers()
+		{
+			_triangleVertexPositionBuffer = _gl.createBuffer();
+			_gl.bindBuffer( _gl.ARRAY_BUFFER, _triangleVertexPositionBuffer );
+			var vertices = [
+				0.0, 1.0, 0.0,
+				-1.0, -1.0, 0.0,
+				1.0, -1.0, 0.0
+			];
+			_gl.bufferData( _gl.ARRAY_BUFFER, new Float32Array( vertices ), _gl.STATIC_DRAW );
+			_triangleVertexPositionBuffer.itemSize = 3;
+			_triangleVertexPositionBuffer.numItems = 3;
+
+			_squareVertexPositionBuffer = _gl.createBuffer();
+			_gl.bindBuffer( _gl.ARRAY_BUFFER, _squareVertexPositionBuffer );
+			vertices = [
+				1.0, 1.0, 0.0,
+				-1.0, 1.0, 0.0,
+				1.0, -1.0, 0.0,
+				-1.0, -1.0, 0.0
+			];
+			_gl.bufferData( _gl.ARRAY_BUFFER, new Float32Array( vertices ), _gl.STATIC_DRAW );
+			_squareVertexPositionBuffer.itemSize = 3;
+			_squareVertexPositionBuffer.numItems = 4;
+		}
+
+		function getShader( gl, id )
+		{
+			var shaderScript = document.getElementById( id );
+			if( !shaderScript )
+			{
+				return null;
+			}
+
+			var str = "";
+			var k = shaderScript.firstChild;
+			while( k )
+			{
+				if( k.nodeType == 3 )
+				{
+					str += k.textContent;
+				}
+				k = k.nextSibling;
+			}
+
+			var shader;
+			if( shaderScript.type == "x-shader/x-fragment" )
+			{
+				shader = gl.createShader( gl.FRAGMENT_SHADER );
+			}
+			else if( shaderScript.type == "x-shader/x-vertex" )
+			{
+				shader = gl.createShader( gl.VERTEX_SHADER );
+			}
+			else
+			{
+				return null;
+			}
+
+			gl.shaderSource( shader, str );
+			gl.compileShader( shader );
+
+			if( !gl.getShaderParameter( shader, gl.COMPILE_STATUS ) )
+			{
+				alert( gl.getShaderInfoLog( shader ) );
+				return null;
+			}
+
+			return shader;
+		}
+
+		function setMatrixUniforms()
+		{
+			_gl.uniformMatrix4fv( _program.pMatrixUniform, false, _pMatrix );
+			_gl.uniformMatrix4fv( _program.mvMatrixUniform, false, _mvMatrix );
+		}
+
+		function render()
+		{
+			_gl.viewport( 0, 0, _gl.viewportWidth, _gl.viewportHeight );
+			_gl.clear( _gl.COLOR_BUFFER_BIT | _gl.DEPTH_BUFFER_BIT );
+
+			mat4.perspective( 45, _gl.viewportWidth / _gl.viewportHeight, 0.1, 100.0, _pMatrix );
+
+			mat4.identity( _mvMatrix );
+
+			mat4.translate( _mvMatrix, [-1.5, 0.0, -7.0] );
+			_gl.bindBuffer( _gl.ARRAY_BUFFER, _triangleVertexPositionBuffer );
+			_gl.vertexAttribPointer( _program.vertexPositionAttribute, _triangleVertexPositionBuffer.itemSize, _gl.FLOAT, false, 0, 0 );
+			setMatrixUniforms();
+			_gl.drawArrays( _gl.TRIANGLES, 0, _triangleVertexPositionBuffer.numItems );
+
+
+			mat4.translate( _mvMatrix, [3.0, 0.0, 0.0] );
+			_gl.bindBuffer( _gl.ARRAY_BUFFER, _squareVertexPositionBuffer );
+			_gl.vertexAttribPointer( _program.vertexPositionAttribute, _squareVertexPositionBuffer.itemSize, _gl.FLOAT, false, 0, 0 );
+			setMatrixUniforms();
+			_gl.drawArrays( _gl.TRIANGLE_STRIP, 0, _squareVertexPositionBuffer.numItems );
+		}
+
+
+		function main()
+		{
+			var canvas = document.getElementById( "canvas" );
+			initGL( canvas );
+			initShaders();
+			initBuffers();
+
+			_gl.clearColor( 0.0, 0.0, 0.0, 1.0 );
+			_gl.enable( _gl.DEPTH_TEST );
+
+			render();
+		}
+
+		window.onload = main;
+	</script>
+</head>
+<body>
+<canvas id="canvas" width="500" height="500"></canvas>
+</body>
+
+</html>

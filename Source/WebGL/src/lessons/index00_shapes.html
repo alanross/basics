@@ -1,0 +1,202 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<title>WebGL Basic Setup</title>
+<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+
+<!-- vertex shader -->
+<script id="2d-vertex-shader" type="x-shader/x-vertex">
+	attribute vec2 a_position;
+
+	uniform vec2 u_resolution;
+
+	void main()
+	{
+	// convert the rectangle from pixels to 0.0 to 1.0
+	vec2 zeroToOne = a_position / u_resolution;
+
+	// convert from 0->1 to 0->2
+	vec2 zeroToTwo = zeroToOne * 2.0;
+
+	// convert from 0->2 to -1->+1 (clipspace)
+	vec2 clipSpace = zeroToTwo - 1.0;
+
+	// pixel space
+	gl_Position = vec4(clipSpace * vec2(1, -1), 0, 1);
+	}
+</script>
+
+<!-- fragment shader -->
+<script id="2d-fragment-shader" type="x-shader/x-fragment">
+	precision mediump float;
+
+	uniform vec4 u_color;
+
+	void main()
+	{
+	gl_FragColor = u_color;
+	}
+</script>
+
+<script type="text/javascript">
+	var _gl;
+	var _program;
+
+	function initGL( canvas )
+	{
+		try
+		{
+			_gl = canvas.getContext( "experimental-webgl" );
+			_gl.viewportWidth = canvas.width;
+			_gl.viewportHeight = canvas.height;
+		}
+		catch( e )
+		{
+		}
+		if( !_gl )
+		{
+			alert( "Could not initialise WebGL, sorry :-(" );
+		}
+	}
+
+	function initShaders()
+	{
+		var fragmentShader = getShader( _gl, "2d-fragment-shader" );
+		var vertexShader = getShader( _gl, "2d-vertex-shader" );
+
+		_program = _gl.createProgram();
+		_gl.attachShader( _program, vertexShader );
+		_gl.attachShader( _program, fragmentShader );
+		_gl.linkProgram( _program );
+
+		if( !_gl.getProgramParameter( _program, _gl.LINK_STATUS ) )
+		{
+			alert( "Could not initialise shaders" );
+		}
+
+		_gl.useProgram( _program );
+
+		// shader.vertexPositionAttribute = gl.getAttribLocation(shader, "aVertexPosition");
+		// gl.enableVertexAttribArray(shader.vertexPositionAttribute);
+//
+		// shader.pMatrixUniform = gl.getUniformLocation(shader, "uPMatrix");
+		// shader.mvMatrixUniform = gl.getUniformLocation(shader, "uMVMatrix");
+	}
+
+	function getShader( gl, id )
+	{
+		var shaderScript = document.getElementById( id );
+		if( !shaderScript )
+		{
+			return null;
+		}
+
+		var str = "";
+		var k = shaderScript.firstChild;
+		while( k )
+		{
+			if( k.nodeType == 3 )
+			{
+				str += k.textContent;
+			}
+			k = k.nextSibling;
+		}
+
+		var shader;
+		if( shaderScript.type == "x-shader/x-fragment" )
+		{
+			shader = gl.createShader( gl.FRAGMENT_SHADER );
+		}
+		else if( shaderScript.type == "x-shader/x-vertex" )
+		{
+			shader = gl.createShader( gl.VERTEX_SHADER );
+		}
+		else
+		{
+			return null;
+		}
+
+		gl.shaderSource( shader, str );
+		gl.compileShader( shader );
+
+		if( !gl.getShaderParameter( shader, gl.COMPILE_STATUS ) )
+		{
+			alert( gl.getShaderInfoLog( shader ) );
+			return null;
+		}
+
+		return shader;
+	}
+
+	// Fill the buffer with the values that define a rectangle.
+	function setRectangle( x, y, width, height )
+	{
+		var x1 = x;
+		var x2 = x + width;
+		var y1 = y;
+		var y2 = y + height;
+
+		_gl.bufferData( _gl.ARRAY_BUFFER, new Float32Array( [x1, y1, x2, y1, x1, y2, x1, y2, x2, y1, x2, y2] ), _gl.STATIC_DRAW );
+	}
+
+	// Returns a random integer from 0 to range - 1.
+	function randomInt( range )
+	{
+		return Math.floor( Math.random() * range );
+	}
+
+	function render()
+	{
+		// look up where the vertex data needs to go.
+		var positionLocation = _gl.getAttribLocation( _program, "a_position" );
+
+		// lookup uniforms
+		var resolutionLocation = _gl.getUniformLocation( _program, "u_resolution" );
+		var colorLocation = _gl.getUniformLocation( _program, "u_color" );
+
+		// set the resolution
+		_gl.uniform2f( resolutionLocation, canvas.width, canvas.height );
+
+		//clear all
+		_gl.clearColor( 0.1, 0.1, 0.1, 1.0 );
+		_gl.enable( _gl.DEPTH_TEST );
+
+		_gl.viewport( 0, 0, _gl.viewportWidth, _gl.viewportHeight );
+		_gl.clear( _gl.COLOR_BUFFER_BIT | _gl.DEPTH_BUFFER_BIT );
+
+
+		// Create a buffer.
+		var buffer = _gl.createBuffer();
+		_gl.bindBuffer( _gl.ARRAY_BUFFER, buffer );
+		_gl.enableVertexAttribArray( positionLocation );
+		_gl.vertexAttribPointer( positionLocation, 2, _gl.FLOAT, false, 0, 0 );
+
+		for( var i = 0; i < 5; ++i )
+		{
+			// Setup a random rectangle
+			setRectangle( randomInt( 300 ), randomInt( 300 ), randomInt( 300 ), randomInt( 300 ) );
+
+			// // Set a random color.
+			_gl.uniform4f( colorLocation, Math.random(), Math.random(), Math.random(), 1 );
+
+			// Draw the rectangle.
+			_gl.drawArrays( _gl.TRIANGLES, 0, 6 );
+		}
+	}
+
+	function main()
+	{
+		var canvas = document.getElementById( "canvas" );
+		initGL( canvas );
+		initShaders();
+
+		render();
+	}
+
+	window.onload = main;
+</script>
+</head>
+<body>
+<canvas id="canvas" width="500" height="500"></canvas>
+</body>
+</html>

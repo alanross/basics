@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <title>Algorithms and Datastructures</title>
+    <script src="https://code.jquery.com/jquery-1.11.2.min.js"></script>
+    <script type="text/javascript" src="array.js"></script>
+    <script type="text/javascript" src="binarysearch.js"></script>
+    <script type="text/javascript" src="binarysearchtree.js"></script>
+    <script type="text/javascript" src="graph.js"></script>
+    <script type="text/javascript" src="hashtable.js"></script>
+    <script type="text/javascript" src="linkedlist.js"></script>
+    <script type="text/javascript" src="lis.js"></script>
+    <script type="text/javascript" src="math.js"></script>
+    <script type="text/javascript" src="permutation.js"></script>
+    <script type="text/javascript" src="queue.js"></script>
+    <script type="text/javascript" src="sorting.js"></script>
+    <script type="text/javascript" src="stack.js"></script>
+    <script type="text/javascript" src="string.js"></script>
+    <script type="text/javascript" src="subset.js"></script>
+    <script type="text/javascript" src="tree.js"></script>
+    <script type="text/javascript">
+
+        function log( info, result )
+        {
+            if( !result )
+            {
+                result = "";
+                info = "<br><strong>" + info + "</strong>";
+            }
+
+            $( '#output' ).append( '<tr><td>' + info + '</td><td>' + result + '</td></tr>' );
+        }
+
+        function ac()
+        {
+            return [ 'a', 'b', 'c', 'd' ];
+        }
+
+        function ai()
+        {
+            return [ 21, 11, 41, 51, 31, 91, 71, 81, 61 ];
+        }
+
+        function s()
+        {
+            return "Hello World";
+        }
+
+        function sl()
+        {
+            return "Go and look at the sky";
+        }
+
+        $( document ).ready( function()
+        {
+            var array = new AArray();
+            log( "ARRAY" );
+            log( "reverse:", ac().join( "," ) + "] > " + array.reverse( ac() ).join( ", " ) );
+            log( "shuffle1:", ac().join( "," ) + "] > " + array.shuffle1( ac() ).join( ", " ) );
+            log( "shuffle2:", ac().join( "," ) + "] > " + array.shuffle2( ac() ).join( ", " ) );
+            log( "merge:", array.merge( [ 1, 2 ], [ 3, 4, 9, 8 ] ).join( ", " ) );
+
+            var bst = new ABinarySearchTree();
+            log( "BINARY SEARCH TREE:" );
+            bst.add( 'hello' );
+            bst.add( 'how' );
+            bst.add( 'are' );
+            bst.add( 'you' );
+            log( "contains: 'hello how are you'", "found: 'meh':" + bst.contains( "meh" ) + ", 'hello':" + bst.contains( "hello" ) );
+
+            var tree = new ABinaryTree();
+            log( "TREE:" );
+            tree.insert( 5 );
+            tree.insert( 9 );
+            tree.insert( 20 );
+            tree.insert( 2 );
+            log( "traverse: ", tree.traverse().join( ", " ) );
+
+            var ll = new LinkedList();
+            log( "LINKED LIST:" );
+            ll.append( 5 );
+            ll.append( 7 );
+            ll.append( 6 );
+            ll.prepend( 14 );
+            ll.prepend( 4 );
+            log( "Items", ll.toString() );
+            ll.remove( 4 );
+            log( "Items", ll.toString() );
+            log( "Has 7", ll.has( 7 ) );
+            log( "Has 4", ll.has( 4 ) || "No" );
+            ll.reverse( ll.getHead() );
+            log( "Reverse", ll.toString() );
+
+            var math = new AMath();
+            log( "MATH:" );
+            log( "fibonacciRecursive:", math.fibonacciRecursive( 8 ) );
+            log( "fibonacciIterative:", math.fibonacciIterative( 8 ) );
+            log( "fibonacciIterativeMemoizing:", math.fibonacciIterativeMemoizing( 8 ) );
+            log( "ggtRecursive: ", math.ggtRecursive( 24, 12 ) );
+            log( "ggt: ", math.ggt( 24, 12 ) );
+            log( "sqrt1: ", math.sqrt1( 9 ) );
+            log( "sqrt2: ", math.sqrt2( 9 ) );
+
+            var string = new AString();
+            log( "STRING:" );
+            log( "dedupe: ", string.dedupe( s() ) );
+            log( "reverseAllWords: ", string.reverseAllWords( sl() ) );
+            log( "reverse: ", string.reverseString( sl() ) );
+            log( "reverseWordsInSentence: ", string.reverseWordsInSentence( sl() ) );
+            log( "strtstr: ", string.strtstr( "ook", sl() ) );
+            log( "asciiToNumerical: ", string.asciiToNumerical( 16 ) );
+            log( "decimalToRoman: ", string.decimalToRoman( 114 ) );
+            log( "romanToDecimal: ", string.romanToDecimal( "CXIV" ) );
+
+            var permutation = new APermutation();
+            log( "PERMUTATION:" );
+            log( "permute: ", permutation.permute( ac() ) );
+            log( "permuteNonDuplicate: ", permutation.permuteNonDuplicate( ac() ) );
+
+            var bs = new ABinarySearch();
+            log( "BINARY SEARCH:" );
+            var oo = ai();
+            bs.quickSort( oo, 0, oo.length - 1 );
+            log( "contains: 21 at index ", bs.search( oo, 21, 0, oo.length - 1 ) );
+
+            var sorting = new ASorting();
+            log( "SORTING:" );
+            log( "quicksort ", sorting.quickSort( ai() ).join( ", " ) );
+            log( "mergesort ", sorting.mergeSort( ai() ).join( ", " ) );
+            log( "bubblesort ", sorting.bubbleSort( ai() ).join( ", " ) );
+
+            var subset = new ASubSet();
+            log( "SUBSET:" );
+            log( "Subsets", subset.getSubsets( [ "1", "2", "3", "4" ] ).join( ", " ) );
+
+            log( "LIS:" );
+            log( "LIS of:" + [ 2, 6, 3, 4, 1, 2, 9, 5, 8 ] + "", computeLIS( [ 2, 6, 3, 4, 1, 2, 9, 5, 8 ] ) );
+            log( "LIS of:" + [ -10, 4, 10, 2 ] + "", computeLIS( [ -10, 4, 10, 2 ] ) );
+        } );
+    </script>
+    <style type="text/css">
+        body {
+            background:#efefef;
+            margin:0;
+            padding:0;
+            width:100%;
+            height:100%;
+        }
+
+        table {
+            margin:20px auto;
+            border:1px solid #898989;
+            display:block;
+            background:#fff;
+            width:60%;
+        }
+
+        table td:first-child {
+            width:200px;
+        }
+    </style>
+</head>
+<body>
+<table id="output"></table>
+</body>
+</html>

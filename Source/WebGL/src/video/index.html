@@ -1,0 +1,515 @@
+<html>
+<head>
+<title>WebGL Video</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<script src="sylvester.js" type="text/javascript"></script>
+
+<!-- Fragment shader program -->
+
+<script id="shader-fs" type="x-shader/x-fragment">
+	varying highp vec2 vTextureCoord;
+
+	uniform sampler2D uSampler;
+
+	void main(void) {
+	gl_FragColor = texture2D(uSampler, vec2(vTextureCoord.s, vTextureCoord.t));
+	}
+</script>
+
+<!-- Vertex shader program -->
+
+<script id="shader-vs" type="x-shader/x-vertex">
+	attribute highp vec3 aVertexPosition;
+	attribute highp vec2 aTextureCoord;
+
+	uniform highp mat4 uNormalMatrix;
+	uniform highp mat4 uMVMatrix;
+	uniform highp mat4 uPMatrix;
+
+	varying highp vec2 vTextureCoord;
+	varying highp vec3 vLighting;
+
+	void main(void) {
+	gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+	vTextureCoord = aTextureCoord;
+	}
+</script>
+<script type="text/javascript">
+var _outputCanvas;
+var _gl;
+var _intervalID;
+
+var _verticesBuffer;
+var _verticesIndexBuffer;
+var _textureBuffer;
+var _rotation = 0.0;
+
+var _videoTexture;
+var _videoElement;
+
+var _mvMatrix;
+var _mvMatrixStack = [];
+
+var _shaderProgram;
+var _vertexPositionAttribute;
+var _textureCoordAttribute;
+var _perspectiveMatrix;
+
+function init()
+{
+	_outputCanvas = document.getElementById( "glcanvas" );
+
+	_videoElement = document.getElementById( "video" );
+
+	initWebGL( _outputCanvas );
+
+	if( _gl )
+	{
+		_gl.clearColor( 0.0, 0.0, 0.0, 1.0 );  // Clear to black, fully opaque
+		_gl.clearDepth( 1.0 );                 // Clear everything
+		_gl.enable( _gl.DEPTH_TEST );           // Enable depth testing
+		_gl.depthFunc( _gl.LEQUAL );            // Near things obscure far things
+
+		initShaders();
+
+		initBuffers();
+
+		_videoTexture = _gl.createTexture();
+
+		// Start listening for the canplaythrough event, so we don't
+		// start playing the video until we can do so without stuttering
+		_videoElement.addEventListener( "canplaythrough", onVideoStart, true );
+
+		// Start listening for the ended event, so we can stop the
+		// animation when the video is finished playing.
+		_videoElement.addEventListener( "ended", onVideoComplete, true );
+	}
+}
+
+function updateTexture()
+{
+	_gl.bindTexture( _gl.TEXTURE_2D, _videoTexture );
+	_gl.pixelStorei( _gl.UNPACK_FLIP_Y_WEBGL, true );
+	_gl.texImage2D( _gl.TEXTURE_2D, 0, _gl.RGB, _gl.RGB, _gl.UNSIGNED_BYTE, _videoElement ); //gl.RGBA also works
+	_gl.texParameteri( _gl.TEXTURE_2D, _gl.TEXTURE_MAG_FILTER, _gl.LINEAR );
+	_gl.texParameteri( _gl.TEXTURE_2D, _gl.TEXTURE_MIN_FILTER, _gl.LINEAR );
+	_gl.texParameteri( _gl.TEXTURE_2D, _gl.TEXTURE_WRAP_S, _gl.CLAMP_TO_EDGE );
+	_gl.texParameteri( _gl.TEXTURE_2D, _gl.TEXTURE_WRAP_T, _gl.CLAMP_TO_EDGE );
+	_gl.bindTexture( _gl.TEXTURE_2D, null );
+}
+
+function onVideoStart()
+{
+	_videoElement.play();
+	_intervalID = setInterval( render, 15 );
+}
+
+function onVideoComplete()
+{
+	clearInterval( _intervalID );
+	onVideoStart();
+}
+
+function render()
+{
+	updateTexture();
+
+	// Clear the canvas before we start drawing on it.
+	_gl.clear( _gl.COLOR_BUFFER_BIT | _gl.DEPTH_BUFFER_BIT );
+
+	// Establish the perspective with which we want to view the
+	// scene. Our field of view is 45 degrees, with a width/height
+	// ratio of 640:480, and we only want to see objects between 0.1 units
+	// and 100 units away from the camera.
+
+	_perspectiveMatrix = makePerspective( 45, 640.0 / 480.0, 0.1, 100.0 );
+
+	// Set the drawing position to the "identity" point, which is
+	// the center of the scene.
+
+	loadIdentity();
+
+	// Now move the drawing position a bit to where we want to start
+	// drawing the cube.
+
+	mvTranslate( [0.0, 0.0, -4.0] );
+
+	// Save the current matrix, then rotate before we draw.
+
+	mvPushMatrix();
+	mvRotate( _rotation += 0.2, [0, 0, 1] );
+
+	// Draw the cube by binding the array buffer to the cube's vertices
+	// array, setting attributes, and pushing it to GL.
+
+	_gl.bindBuffer( _gl.ARRAY_BUFFER, _verticesBuffer );
+	_gl.vertexAttribPointer( _vertexPositionAttribute, 3, _gl.FLOAT, false, 0, 0 );
+
+	// Set the texture coordinates attribute for the vertices.
+
+	_gl.bindBuffer( _gl.ARRAY_BUFFER, _textureBuffer );
+	_gl.vertexAttribPointer( _textureCoordAttribute, 2, _gl.FLOAT, false, 0, 0 );
+
+	// Specify the texture to map onto the faces.
+
+	_gl.activeTexture( _gl.TEXTURE0 );
+	_gl.bindTexture( _gl.TEXTURE_2D, _videoTexture );
+	_gl.uniform1i( _gl.getUniformLocation( _shaderProgram, "uSampler" ), 0 );
+
+	_gl.bindBuffer( _gl.ELEMENT_ARRAY_BUFFER, _verticesIndexBuffer );
+	_gl.drawElements( _gl.TRIANGLES, 6, _gl.UNSIGNED_SHORT, 0 );
+
+	setMatrixUniforms();
+	// Restore the original matrix
+
+	mvPopMatrix();
+}
+
+function initWebGL()
+{
+	_gl = null;
+
+	try
+	{
+		_gl = _outputCanvas.getContext( "experimental-webgl" );
+	}
+	catch( e )
+	{
+	}
+
+	if( !_gl )
+	{
+		alert( "Unable to initialize WebGL. Your browser may not support it." );
+	}
+}
+
+function initBuffers()
+{
+	var vertices = [
+		-1.0, -1.0, 0.0,
+		1.0, -1.0, 0.0,
+		1.0, 1.0, 0.0,
+		-1.0, 1.0, 0.0
+	];
+
+	_verticesBuffer = _gl.createBuffer();
+	_gl.bindBuffer( _gl.ARRAY_BUFFER, _verticesBuffer );
+	_gl.bufferData( _gl.ARRAY_BUFFER, new Float32Array( vertices ), _gl.STATIC_DRAW );
+
+
+	var uvs = [
+		0.0, 0.0,
+		1.0, 0.0,
+		1.0, 1.0,
+		0.0, 1.0
+	];
+
+	_textureBuffer = _gl.createBuffer();
+	_gl.bindBuffer( _gl.ARRAY_BUFFER, _textureBuffer );
+	_gl.bufferData( _gl.ARRAY_BUFFER, new Float32Array( uvs ), _gl.STATIC_DRAW );
+
+	_verticesIndexBuffer = _gl.createBuffer();
+	_gl.bindBuffer( _gl.ELEMENT_ARRAY_BUFFER, _verticesIndexBuffer );
+
+	var indices = [ 0, 1, 3, 3, 1, 2 ];
+	_gl.bufferData( _gl.ELEMENT_ARRAY_BUFFER, new Uint16Array( indices ), _gl.STATIC_DRAW );
+}
+
+function initShaders()
+{
+	var fragmentShader = getShader( _gl, "shader-fs" );
+	var vertexShader = getShader( _gl, "shader-vs" );
+
+	// Create the shader program
+
+	_shaderProgram = _gl.createProgram();
+	_gl.attachShader( _shaderProgram, vertexShader );
+	_gl.attachShader( _shaderProgram, fragmentShader );
+	_gl.linkProgram( _shaderProgram );
+
+	// If creating the shader program failed, alert
+
+	if( !_gl.getProgramParameter( _shaderProgram, _gl.LINK_STATUS ) )
+	{
+		alert( "Unable to initialize the shader program." );
+	}
+
+	_gl.useProgram( _shaderProgram );
+
+	_vertexPositionAttribute = _gl.getAttribLocation( _shaderProgram, "aVertexPosition" );
+	_gl.enableVertexAttribArray( _vertexPositionAttribute );
+
+	_textureCoordAttribute = _gl.getAttribLocation( _shaderProgram, "aTextureCoord" );
+	_gl.enableVertexAttribArray( _textureCoordAttribute );
+}
+
+function getShader( gl, id )
+{
+	var shaderScript = document.getElementById( id );
+
+	// Didn't find an element with the specified ID; abort.
+
+	if( !shaderScript )
+	{
+		return null;
+	}
+
+	// Walk through the source element's children, building the
+	// shader source string.
+
+	var theSource = "";
+	var currentChild = shaderScript.firstChild;
+
+	while( currentChild )
+	{
+		if( currentChild.nodeType == 3 )
+		{
+			theSource += currentChild.textContent;
+		}
+
+		currentChild = currentChild.nextSibling;
+	}
+
+	// Now figure out what type of shader script we have,
+	// based on its MIME type.
+
+	var shader;
+
+	if( shaderScript.type == "x-shader/x-fragment" )
+	{
+		shader = gl.createShader( gl.FRAGMENT_SHADER );
+	}
+	else if( shaderScript.type == "x-shader/x-vertex" )
+	{
+		shader = gl.createShader( gl.VERTEX_SHADER );
+	}
+	else
+	{
+		return null;  // Unknown shader type
+	}
+
+	// Send the source to the shader object
+
+	gl.shaderSource( shader, theSource );
+
+	// Compile the shader program
+
+	gl.compileShader( shader );
+
+	// See if it compiled successfully
+
+	if( !gl.getShaderParameter( shader, gl.COMPILE_STATUS ) )
+	{
+		alert( "An error occurred compiling the shaders: " + gl.getShaderInfoLog( shader ) );
+		return null;
+	}
+
+	return shader;
+}
+
+// gl/matrix utils
+
+function loadIdentity()
+{
+	_mvMatrix = Matrix.I( 4 );
+}
+
+function multMatrix( m )
+{
+	_mvMatrix = _mvMatrix.x( m );
+}
+
+function mvTranslate( v )
+{
+	multMatrix( Matrix.Translation( $V( [v[0], v[1], v[2]] ) ).ensure4x4() );
+}
+
+function setMatrixUniforms()
+{
+	var pUniform = _gl.getUniformLocation( _shaderProgram, "uPMatrix" );
+	_gl.uniformMatrix4fv( pUniform, false, new Float32Array( _perspectiveMatrix.flatten() ) );
+
+	var mvUniform = _gl.getUniformLocation( _shaderProgram, "uMVMatrix" );
+	_gl.uniformMatrix4fv( mvUniform, false, new Float32Array( _mvMatrix.flatten() ) );
+
+	var normalMatrix = _mvMatrix.inverse();
+	normalMatrix = normalMatrix.transpose();
+	var nUniform = _gl.getUniformLocation( _shaderProgram, "uNormalMatrix" );
+	_gl.uniformMatrix4fv( nUniform, false, new Float32Array( normalMatrix.flatten() ) );
+}
+
+function mvPushMatrix( m )
+{
+	if( m )
+	{
+		_mvMatrixStack.push( m.dup() );
+		_mvMatrix = m.dup();
+	}
+	else
+	{
+		_mvMatrixStack.push( _mvMatrix.dup() );
+	}
+}
+
+function mvPopMatrix()
+{
+	if( !_mvMatrixStack.length )
+	{
+		throw("Can't pop from an empty matrix stack.");
+	}
+
+	_mvMatrix = _mvMatrixStack.pop();
+	return _mvMatrix;
+}
+
+function mvRotate( angle, v )
+{
+	var inRadians = angle * Math.PI / 180.0;
+
+	var m = Matrix.Rotation( inRadians, $V( [v[0], v[1], v[2]] ) ).ensure4x4();
+	multMatrix( m );
+}
+
+//// augment Sylvester some
+Matrix.Translation = function ( v )
+{
+	if( v.elements.length == 2 )
+	{
+		var r = Matrix.I( 3 );
+		r.elements[2][0] = v.elements[0];
+		r.elements[2][1] = v.elements[1];
+		return r;
+	}
+
+	if( v.elements.length == 3 )
+	{
+		var r = Matrix.I( 4 );
+		r.elements[0][3] = v.elements[0];
+		r.elements[1][3] = v.elements[1];
+		r.elements[2][3] = v.elements[2];
+		return r;
+	}
+
+	throw "Invalid length for Translation";
+}
+
+Matrix.prototype.flatten = function ()
+{
+	var result = [];
+	if( this.elements.length == 0 )
+	{
+		return [];
+	}
+
+
+	for( var j = 0; j < this.elements[0].length; j++ )
+	{
+		for( var i = 0; i < this.elements.length; i++ )
+		{
+			result.push( this.elements[i][j] );
+		}
+	}
+	return result;
+}
+
+Matrix.prototype.ensure4x4 = function ()
+{
+	if( this.elements.length == 4 &&
+			this.elements[0].length == 4 )
+	{
+		return this;
+	}
+
+	if( this.elements.length > 4 ||
+			this.elements[0].length > 4 )
+	{
+		return null;
+	}
+
+	for( var i = 0; i < this.elements.length; i++ )
+	{
+		for( var j = this.elements[i].length; j < 4; j++ )
+		{
+			if( i == j )
+			{
+				this.elements[i].push( 1 );
+			}
+			else
+			{
+				this.elements[i].push( 0 );
+			}
+		}
+	}
+
+	for( var i = this.elements.length; i < 4; i++ )
+	{
+		if( i == 0 )
+		{
+			this.elements.push( [1, 0, 0, 0] );
+		}
+		else if( i == 1 )
+		{
+			this.elements.push( [0, 1, 0, 0] );
+		}
+		else if( i == 2 )
+		{
+			this.elements.push( [0, 0, 1, 0] );
+		}
+		else if( i == 3 )
+		{
+			this.elements.push( [0, 0, 0, 1] );
+		}
+	}
+
+	return this;
+};
+
+function makePerspective( fovy, aspect, znear, zfar )
+{
+	var ymax = znear * Math.tan( fovy * Math.PI / 360.0 );
+	var ymin = -ymax;
+	var xmin = ymin * aspect;
+	var xmax = ymax * aspect;
+
+	return makeFrustum( xmin, xmax, ymin, ymax, znear, zfar );
+}
+
+function makeFrustum( left, right, bottom, top, znear, zfar )
+{
+	var X = 2 * znear / (right - left);
+	var Y = 2 * znear / (top - bottom);
+	var A = (right + left) / (right - left);
+	var B = (top + bottom) / (top - bottom);
+	var C = -(zfar + znear) / (zfar - znear);
+	var D = -2 * zfar * znear / (zfar - znear);
+
+	return $M( [
+		[X, 0, A, 0],
+		[0, Y, B, 0],
+		[0, 0, C, D],
+		[0, 0, -1, 0]
+	] );
+}
+
+</script>
+<style>
+	canvas {
+		background-color:black;
+	}
+
+	video {
+		display:none;
+	}
+</style>
+</head>
+
+<body onload="init()">
+<canvas id="glcanvas" width="640" height="480"></canvas>
+<video id="video" controls muted preload auto>
+	<!-- the browser will choose its supported format automatically -->
+	<source src="video_640x360.mp4" type="video/mp4">
+	<source src="video_640x360.ogv" type="video/ogv">
+</video>
+<p>Demo will probably only work on a server or localhost</p>
+</body>
+</html>
