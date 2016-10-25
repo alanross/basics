@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Image texture</title>
+    <script type="text/javascript" src="webgl.js"></script>
+    <script src="https://code.jquery.com/jquery-1.11.2.min.js"></script>
+    <script>
+        var _gl = null;
+        var _glCanvas = null;
+        var _glProgram = null;
+        var _glBuffer = null;
+        var _glFrameBuffer = null;
+        var _glImageTexture = null;
+
+        var _image = null;
+        var _imageWidth = 384;
+        var _imageHeight = 288;
+
+        var CANVAS_W = 500;
+        var CANVAS_H = 380;
+
+        var _uvs = [];
+        var _points = [];
+
+        var _segments = 6;
+
+        function initWebGL()
+        {
+            _glCanvas = document.getElementById( "canvas" );
+            _glCanvas.width = CANVAS_W;
+            _glCanvas.height = CANVAS_H;
+
+            _gl = getWebGLContext( _glCanvas );
+
+            if( !_gl )
+            {
+                console.log( "No WebGL support!" );
+                return;
+            }
+
+            var vertShader = createShaderFromScriptElement( _gl, "2d-vertex-shader" );
+            var fragShader = createShaderFromScriptElement( _gl, "2d-fragment-shader" );
+
+            _glProgram = createProgram( _gl, [ vertShader, fragShader ] );
+            _gl.useProgram( _glProgram );
+
+            var position = _gl.getAttribLocation( _glProgram, "a_position" );
+            var texCoord = _gl.getAttribLocation( _glProgram, "a_texCoord" );
+            var resolution = _gl.getUniformLocation( _glProgram, "u_resolution" );
+
+            var xStride = ( _imageWidth / _segments ) / _imageWidth;
+            var yStride = ( _imageHeight / _segments ) /_imageHeight;
+
+            for( var uy = 0; uy < _segments; ++uy )
+            {
+                for( var ux = 0; ux < _segments; ++ux )
+                {
+                    var x = ux * xStride;
+                    var y = uy * yStride;
+                    var w = yStride;
+                    var h = yStride;
+
+                    _uvs = _uvs.concat( [
+                        x, y, x + w, y, x, y + h,
+                        x, y + h, x + w, y, x + w, y + h
+                    ] );
+                }
+            }
+
+            var texCoordBuffer = _gl.createBuffer();
+            _gl.bindBuffer( _gl.ARRAY_BUFFER, texCoordBuffer );
+            _gl.bufferData( _gl.ARRAY_BUFFER, new Float32Array( _uvs ), _gl.STATIC_DRAW );
+            _gl.enableVertexAttribArray( texCoord );
+            _gl.vertexAttribPointer( texCoord, 2, _gl.FLOAT, false, 0, 0 );
+
+            _glImageTexture = _gl.createTexture();
+            _gl.bindTexture( _gl.TEXTURE_2D, _glImageTexture );
+            _gl.texParameteri( _gl.TEXTURE_2D, _gl.TEXTURE_WRAP_S, _gl.CLAMP_TO_EDGE );
+            _gl.texParameteri( _gl.TEXTURE_2D, _gl.TEXTURE_WRAP_T, _gl.CLAMP_TO_EDGE );
+            _gl.texParameteri( _gl.TEXTURE_2D, _gl.TEXTURE_MIN_FILTER, _gl.NEAREST );
+            _gl.texParameteri( _gl.TEXTURE_2D, _gl.TEXTURE_MAG_FILTER, _gl.NEAREST );
+            _gl.bindTexture( _gl.TEXTURE_2D, null );
+
+            _glFrameBuffer = _gl.createFramebuffer();
+            _gl.bindFramebuffer( _gl.FRAMEBUFFER, _glFrameBuffer );
+            _gl.framebufferTexture2D( _gl.FRAMEBUFFER, _gl.COLOR_ATTACHMENT0, _gl.TEXTURE_2D, _glImageTexture, 0 );
+            _gl.bindFramebuffer( _gl.FRAMEBUFFER, null );
+
+            _gl.uniform2f( resolution, CANVAS_W, CANVAS_H );
+
+            _glBuffer = _gl.createBuffer();
+            _gl.bindBuffer( _gl.ARRAY_BUFFER, _glBuffer );
+            _gl.enableVertexAttribArray( position );
+            _gl.vertexAttribPointer( position, 2, _gl.FLOAT, false, 0, 0 );
+            _gl.bindBuffer( _gl.ARRAY_BUFFER, null );
+
+            _gl.viewport( 0, 0, CANVAS_W, CANVAS_H );
+        }
+
+        function createRectangle( x, y, w, h )
+        {
+            var x1 = x;
+            var x2 = x + w;
+            var y1 = y;
+            var y2 = y + h;
+
+            return [ x1, y1, x2, y1, x1, y2, x1, y2, x2, y1, x2, y2 ];
+        }
+
+        function createTriangle( x0, y0, x1, y1, x2, y2 )
+        {
+            return [ x0, y0, x1, y1, x2, y2 ];
+        }
+
+        function renderTick()
+        {
+            _gl.clear( _gl.COLOR_BUFFER_BIT );
+            _gl.clearColor( 0.5, 0.5, 0.5, 1 );
+            _gl.activeTexture( _gl.TEXTURE0 );
+            _gl.bindTexture( _gl.TEXTURE_2D, _glImageTexture );
+            _gl.texImage2D( _gl.TEXTURE_2D, 0, _gl.RGBA, _gl.RGBA, _gl.UNSIGNED_BYTE, _image );
+            _gl.bindBuffer( _gl.ARRAY_BUFFER, _glBuffer );
+
+            _points = [];
+
+            var s = 40;
+
+            for( var vy = 0; vy < _segments; ++vy )
+            {
+                for( var vx = 0; vx < _segments; ++vx )
+                {
+                    var px = (vx * 2) + vx * s;
+                    var py = (vy * 1) + vy * s;
+                    var pw = s;
+                    var ph = s;
+
+                    var x1 = px;
+                    var x2 = px + pw;
+                    var y1 = py;
+                    var y2 = py + ph;
+
+                    _points = _points.concat( [
+                        x1, y1, x2, y1, x1, y2,
+                        x1+1, y2, x2+1, y1, x2+1, y2
+                    ] );
+                }
+            }
+
+            _gl.bufferData( _gl.ARRAY_BUFFER, new Float32Array( _points ), _gl.STATIC_DRAW );
+            _gl.drawArrays( _gl.TRIANGLES, 0, ( _points.length / 2 ) );
+            _gl.bindBuffer( _gl.ARRAY_BUFFER, null );
+            _gl.bindTexture( _gl.TEXTURE_2D, null );
+
+            //requestAnimationFrame( renderTick );
+        }
+
+        function initAnimationFrame()
+        {
+            // handling of requestAnimationFrame calls
+            var lastTime = 0;
+            var vendors = [ 'ms', 'moz', 'webkit', 'o' ];
+
+            for( var x = 0; x < vendors.length && !window.requestAnimationFrame; ++x )
+            {
+                window.requestAnimationFrame = window[ vendors[ x ] + 'RequestAnimationFrame' ];
+                window.cancelAnimationFrame = window[ vendors[ x ] + 'CancelAnimationFrame' ] || window[ vendors[ x ] + 'CancelRequestAnimationFrame' ];
+            }
+
+            if( !window.requestAnimationFrame )
+            {
+                window.requestAnimationFrame = function( callback, element )
+                {
+                    var currTime = new Date().getTime();
+                    var timeToCall = Math.max( 0, 16 - (currTime - lastTime) );
+                    var id = window.setTimeout( function()
+                    {
+                        callback( currTime + timeToCall );
+                    }, timeToCall );
+
+                    lastTime = currTime + timeToCall;
+
+                    return id;
+                };
+            }
+
+            if( !window.cancelAnimationFrame )
+            {
+                window.cancelAnimationFrame = function( id )
+                {
+                    clearTimeout( id );
+                };
+            }
+        }
+
+        $( function()
+        {
+            _image = new Image();
+            _image.onload = function()
+            {
+                initAnimationFrame();
+
+                initWebGL();
+
+                renderTick();
+            };
+
+            _image.src = "image.jpg";
+
+        } );
+    </script>
+    <script id="2d-vertex-shader" type="x-shader/x-vertex">
+    attribute vec2 a_position;
+    attribute vec2 a_texCoord;
+
+    uniform vec2 u_resolution;
+
+    varying vec2 v_texCoord;
+
+    void main() {
+       // convert the rectangle from pixels to 0.0 to 1.0
+       vec2 zeroToOne = a_position / u_resolution;
+
+       // convert from 0->1 to 0->2
+       vec2 zeroToTwo = zeroToOne * 2.0;
+
+       // convert from 0->2 to -1->+1 (clipspace)
+       vec2 clipSpace = zeroToTwo - 1.0;
+
+       gl_Position = vec4(clipSpace * vec2(1, -1), 0, 1);
+
+       // pass the texCoord to the fragment shader
+       // The GPU will interpolate this value between points.
+       v_texCoord = a_texCoord;
+    }
+    </script>
+    <script id="2d-fragment-shader" type="x-shader/x-fragment">
+    precision mediump float;
+
+    // our texture
+    uniform sampler2D u_image;
+
+    // the texCoords passed in from the vertex shader.
+    varying vec2 v_texCoord;
+
+    void main()
+    {
+       gl_FragColor = texture2D(u_image, v_texCoord);
+    }
+    </script>
+    <style>
+        body, html {
+            background:#fff;
+            padding:0;
+            margin:0;
+            width:100%;
+            height:100%
+        }
+
+        canvas {
+            margin:50px auto 0 auto;
+            padding:0;
+            display:block;
+            background:red;
+            border:1px solid #565656;
+        }
+    </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+</body>
+</html>
