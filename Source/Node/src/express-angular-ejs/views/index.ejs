@@ -1,0 +1,24 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html ng-app="myApp">
+<head>
+	<meta charset="utf8">
+	<base href="/">
+	<title>Node - Express - Angular - EJS</title>
+	<link rel="stylesheet" href="app.css">
+</head>
+<body class="container">
+
+<div ng-controller="AppCtrl"><h2>Hello {{name}}</h2>
+	<ul class="menu">
+		<li><a href="view1">View1</a></li>
+		<li><a href="view2">View2</a></li>
+	</ul>
+	<div ng-view></div>
+	<p>Version <span app-version></span></p>
+	<p>Something <span app-something-something></span></p>
+</div>
+
+<script src="http://code.angularjs.org/angular-1.0.0.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
